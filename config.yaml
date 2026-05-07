@@ -1,0 +1,38 @@
+dataset:
+  name: bird_dev
+  db_root: data/bird/dev/dev_databases
+  questions: data/bird/dev/dev.json
+  train_questions: data/bird/train/train.json
+
+artifacts:
+  profile_root: artifacts/bird_dev/profiles
+  index_root: artifacts/bird_dev/indexes
+  run_root: runs/bird_dev
+
+llm:
+  backend: vllm
+  api_base: http://127.0.0.1:8000/v1
+  api_key: EMPTY
+  timeout_seconds: 600
+  models:
+    - name: gpt-oss-20b
+      model_id: openai/gpt-oss-20b
+    - name: gpt-oss-120b
+      model_id: openai/gpt-oss-120b
+
+hf:
+  token_env: HF_TOKEN
+
+embeddings:
+  backend: sentence_transformers
+  model: BAAI/bge-base-en-v1.5
+  device: cuda
+  batch_size: 64
+
+pipeline:
+  faiss_top_k: 10
+  candidate_workers: 1
+  candidates_per_combo: 3
+  final_candidates: 3
+  max_correction_retries: 3
+  questions_limit: null
