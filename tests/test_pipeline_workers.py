@@ -96,6 +96,60 @@ class PipelineWorkerTests(unittest.TestCase):
         self.assertEqual(len(retriever.pool), 1)
         self.assertEqual(retriever._index.ntotal, 1)
 
+    def test_build_final_schema_links_keeps_focused_columns(self):
+        from pipeline import build_final_schema_links
+
+        schema = {
+            "schools": [
+                {"column": "CDSCode", "type": "TEXT", "pk": True, "fk": False},
+                {"column": "School", "type": "TEXT", "pk": False, "fk": False},
+            ],
+            "frpm": [
+                {"column": "CDSCode", "type": "TEXT", "pk": False, "fk": True},
+                {"column": "District Name", "type": "TEXT", "pk": False, "fk": False},
+            ],
+        }
+        focused_columns = {"frpm.District Name"}
+        combo_columns = {
+            "focused_short": [{"table": "schools", "column": "School"}],
+            "full_short": [],
+        }
+
+        links = build_final_schema_links(
+            schema,
+            focused_columns=focused_columns,
+            combo_columns=combo_columns,
+        )
+
+        self.assertIn({"table": "frpm", "column": "District Name"}, links)
+        self.assertIn({"table": "schools", "column": "School"}, links)
+
+    def test_build_final_schema_links_adds_key_columns_for_linked_tables(self):
+        from pipeline import build_final_schema_links
+
+        schema = {
+            "cards": [
+                {"column": "id", "type": "INTEGER", "pk": True, "fk": False},
+                {"column": "uuid", "type": "TEXT", "pk": False, "fk": False},
+                {"column": "name", "type": "TEXT", "pk": False, "fk": False},
+            ],
+            "legalities": [
+                {"column": "uuid", "type": "TEXT", "pk": False, "fk": True},
+                {"column": "status", "type": "TEXT", "pk": False, "fk": False},
+            ],
+        }
+
+        links = build_final_schema_links(
+            schema,
+            focused_columns=set(),
+            combo_columns={
+                "focused_short": [{"table": "legalities", "column": "status"}],
+            },
+        )
+
+        self.assertIn({"table": "legalities", "column": "uuid"}, links)
+        self.assertIn({"table": "legalities", "column": "status"}, links)
+
 
 if __name__ == "__main__":
     unittest.main()

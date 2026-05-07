@@ -350,6 +350,58 @@ def extract_columns_from_sql(
         return _extract_columns_regex(sql, schema)
 
 
+def _is_key_like_column(col: Dict[str, Any]) -> bool:
+    """Return true for columns likely needed for joins/counts in pruned schemas."""
+    name = str(col.get("column", "")).lower()
+    return (
+        bool(col.get("pk"))
+        or bool(col.get("fk"))
+        or name in {"id", "uuid"}
+        or name.endswith("_id")
+        or name.endswith("id")
+    )
+
+
+def build_final_schema_links(
+    schema: Dict[str, List[Dict[str, Any]]],
+    focused_columns: Set[str],
+    combo_columns: Dict[str, List[Dict[str, str]]],
+) -> List[Dict[str, str]]:
+    """
+    Build high-recall final schema links.
+
+    The paper emphasizes recall over precision for schema linking. Keep columns
+    found by FAISS/LSH focus even when generated SQL did not mention them, then
+    add key-like columns for every linked table so joins/counts are not starved.
+    """
+    links: Set[Tuple[str, str]] = set()
+
+    for key in focused_columns:
+        if "." not in key:
+            continue
+        table, column = key.split(".", 1)
+        if table in schema:
+            links.add((table, column))
+
+    for cols in combo_columns.values():
+        for col in cols:
+            table = col.get("table")
+            column = col.get("column")
+            if table and column and table in schema:
+                links.add((table, column))
+
+    linked_tables = {table for table, _ in links}
+    for table in list(linked_tables):
+        for col in schema.get(table, []):
+            if _is_key_like_column(col):
+                links.add((table, col["column"]))
+
+    return [
+        {"table": table, "column": column}
+        for table, column in sorted(links)
+    ]
+
+
 # -- Schema Renderer -------------------------------------------
 
 def _get_column_comment(
@@ -1086,10 +1138,11 @@ class SchemaLinker:
                 combo_sqls[combo_name]    = ""
                 combo_columns[combo_name] = []
 
-        schema_links = [
-            {"table": t, "column": c}
-            for t, c in sorted(all_schema_links)
-        ]
+        schema_links = build_final_schema_links(
+            self.schema,
+            focused_columns=focused_cols,
+            combo_columns=combo_columns,
+        )
 
         return {
             "question_id":     question_id,
