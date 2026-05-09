@@ -32,6 +32,7 @@ class LLMConfig:
     backend: str
     api_base: str = ""
     api_key: str = ""
+    api_key_env: str = ""
     timeout_seconds: int = 600
     models: List[ModelConfig] = field(default_factory=list)
 
@@ -132,6 +133,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
             backend=str(llm.get("backend", "openai")),
             api_base=str(llm.get("api_base", "")),
             api_key=str(llm.get("api_key", "")),
+            api_key_env=str(llm.get("api_key_env", "")),
             timeout_seconds=int(llm.get("timeout_seconds", 600)),
             models=models,
         ),
@@ -173,11 +175,14 @@ def make_backend_from_config(
 
     apply_hf_token_env(cfg)
     model = cfg.model(model_name)
+    api_key = cfg.llm.api_key
+    if cfg.llm.api_key_env:
+        api_key = os.environ.get(cfg.llm.api_key_env, api_key)
     return make_backend(
         cfg.llm.backend,
         model_id=model.model_id,
         api_base=cfg.llm.api_base,
-        api_key=cfg.llm.api_key,
+        api_key=api_key,
         timeout_seconds=cfg.llm.timeout_seconds,
         cache=cache,
     )

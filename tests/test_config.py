@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -62,6 +63,42 @@ pipeline:
             self.assertEqual(cfg.pipeline.faiss_top_k, 7)
             self.assertEqual(cfg.pipeline.candidate_workers, 2)
             self.assertEqual(cfg.pipeline.questions_limit, 3)
+
+    def test_openai_compatible_api_key_can_come_from_environment(self):
+        from config import load_config, make_backend_from_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cfg_path = root / "config.yaml"
+            cfg_path.write_text(
+                """
+dataset:
+  db_root: data/bird/dev/dev_databases
+  questions: data/bird/dev/dev.json
+  train_questions: data/bird/train/train.json
+artifacts:
+  run_root: runs/bird_dev
+llm:
+  backend: openai_compatible
+  api_base: https://example.test/v1
+  api_key_env: COMPAT_API_KEY
+  timeout_seconds: 321
+  models:
+    - name: local-model
+      model_id: provider/model
+""",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict("os.environ", {"COMPAT_API_KEY": "compat-test-key"}):
+                cfg = load_config(cfg_path)
+                backend = make_backend_from_config(cfg, "local-model", cache=False)
+
+        self.assertEqual(cfg.llm.api_key_env, "COMPAT_API_KEY")
+        self.assertEqual(backend.api_base, "https://example.test/v1")
+        self.assertEqual(backend.api_key, "compat-test-key")
+        self.assertEqual(backend.model_id, "provider/model")
+        self.assertEqual(backend.timeout_seconds, 321)
 
     def test_default_config_points_at_bird_dev_files(self):
         from config import load_config
